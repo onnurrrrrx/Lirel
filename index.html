@@ -18,14 +18,41 @@ main{max-width:900px;margin:auto}.eyebrow{color:var(--accent);font-weight:700;le
 .app-tab:focus-visible{outline:3px solid #53aaff;outline-offset:2px}
 .app-tab-panel[hidden]{display:none!important}
 .app-tab-panel>section.card{margin-top:0!important}
-@media(max-width:600px){.app-tabs{top:4px;gap:6px;padding:5px}.app-tab{flex-basis:100%;padding:10px 12px}}</style>
+@media(max-width:600px){.app-tabs{top:4px;gap:6px;padding:5px}.app-tab{flex-basis:100%;padding:10px 12px}}.cloud-controls{display:grid;grid-template-columns:minmax(180px,1fr) minmax(180px,1fr) auto auto;gap:10px;align-items:end}
+.cloud-controls label{display:grid;gap:5px;color:var(--muted);font-size:13px}
+.cloud-controls input{border:1px solid var(--line);background:#11151d;color:var(--text);padding:10px;border-radius:9px;font:inherit}
+.cloud-account{display:flex;align-items:center;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:13px}
+.cloud-account strong{color:var(--text)}
+.cloud-conflict{margin-top:12px;padding:12px;border:1px solid #b48b41;border-radius:10px;background:#40331b}
+.cloud-conflict p{margin:0 0 10px;color:var(--text)}
+.cloud-sync-card .market-note{margin:10px 0 0}
+@media(max-width:680px){.cloud-controls{grid-template-columns:1fr 1fr}.cloud-controls label{grid-column:1/-1}.cloud-controls button{grid-column:auto}}</style>
 </head>
 <body>
 <main>
 <div class="eyebrow">NosTale · Markt & Inventar</div>
 <h1>Item-Rechner</h1>
 <p>Wähle ein Item und den Server aus. Der günstigste aktuelle Einzelpreis wird automatisch von NosBazar übernommen; du trägst nur noch deine Menge ein.</p>
-<nav class="app-tabs" id="app-tabs" role="tablist" aria-label="Rechner-Bereiche">
+<section class="card cloud-sync-card" aria-label="Cloud-Synchronisierung">
+<div class="topline"><h2>Geräte-Synchronisierung</h2><span id="cloud-status" class="hint" aria-live="polite">Nur auf diesem Gerät gespeichert</span></div>
+<div id="cloud-login-form" class="cloud-controls">
+<label>E-Mail<input id="cloud-email" type="email" autocomplete="email" placeholder="name@example.com"></label>
+<label>Passwort<input id="cloud-password" type="password" autocomplete="current-password" placeholder="Mindestens 6 Zeichen"></label>
+<button class="button primary" id="cloud-login" type="button">Anmelden</button>
+<button class="button" id="cloud-register" type="button">Konto erstellen</button>
+</div>
+<div id="cloud-account" class="cloud-account" hidden>
+<span>Angemeldet als <strong id="cloud-user-email"></strong></span>
+<button class="button" id="cloud-sync-now" type="button">Jetzt synchronisieren</button>
+<button class="button" id="cloud-logout" type="button">Abmelden</button>
+</div>
+<div id="cloud-conflict" class="cloud-conflict" hidden>
+<p id="cloud-conflict-message"></p>
+<button class="button primary" id="cloud-use-cloud" type="button">Cloud-Liste laden</button>
+<button class="button" id="cloud-use-local" type="button">Diese Geräteliste in die Cloud übernehmen</button>
+</div>
+<p id="cloud-message" class="market-note">Melde dich auf PC und Handy mit demselben Konto an. Änderungen werden automatisch gespeichert.</p>
+</section><nav class="app-tabs" id="app-tabs" role="tablist" aria-label="Rechner-Bereiche">
 <button class="app-tab is-active" id="tab-items" type="button" role="tab" aria-selected="true" aria-controls="panel-items" tabindex="0">Item-Liste</button>
 <button class="app-tab" id="tab-market" type="button" role="tab" aria-selected="false" aria-controls="panel-market" tabindex="-1">Basarsuche</button>
 <button class="app-tab" id="tab-own" type="button" role="tab" aria-selected="false" aria-controls="panel-own" tabindex="-1">Eigene Angebote prüfen</button>
@@ -87,7 +114,7 @@ try{const saved=JSON.parse(localStorage.getItem('nostale-item-rechner')||'[]');i
 if(!data.length)data=[{name:'',qty:1,price:0}];
 try{const server=localStorage.getItem('nostale-item-rechner-server');if(server==='1'||server==='11')serverSelect.value=server;}catch{}
 for(const item of data){if(!item.icon&&item.name){const found=byName.get(item.name.toLocaleLowerCase('de'));if(found){item.icon=found[2];item.vnum=found[0]}}}
-function save(){localStorage.setItem('nostale-item-rechner',JSON.stringify(data));statusEl.textContent='Änderungen gespeichert';}
+function save(){localStorage.setItem('nostale-item-rechner',JSON.stringify(data));statusEl.textContent='Änderungen gespeichert';window.queueNostaleCloudSave?.();}
 function updateTotals(){let total=0;data.forEach((x,i)=>{const row=(Number(x.qty)||0)*(Number(x.price)||0);total+=row;const cell=tbody.querySelector(`[data-row="${i}"]`);if(cell)cell.textContent=fmt.format(row)+' Gold';});grand.textContent=fmt.format(total)+' Gold';}
 async function fetchMarketPrice(item,quiet=false){
  if(!item||!item.vnum){if(!quiet)statusEl.textContent='Für diesen Namen wurde kein Item in der Datenbank gefunden.';return false}
@@ -111,7 +138,7 @@ function render(){tbody.replaceChildren();data.forEach((item,i)=>{const tr=docum
  const nameWrap=document.createElement('div');nameWrap.className='name-cell';nameWrap.append(icon,name);const td1=document.createElement('td');td1.append(nameWrap);const td2=document.createElement('td');td2.append(qty);const td3=document.createElement('td');td3.append(price);const td4=document.createElement('td');td4.className='row-total';td4.dataset.row=String(i);const td5=document.createElement('td');const del=document.createElement('button');del.className='remove';del.type='button';del.title='Item entfernen';del.setAttribute('aria-label','Item entfernen');del.textContent='×';del.addEventListener('click',()=>{data.splice(i,1);if(!data.length)data.push({name:'',qty:1,price:0});render();save()});td5.append(del);tr.append(td1,td2,td3,td4,td5);tbody.append(tr);});updateTotals();}
 document.querySelector('#add').addEventListener('click',()=>{data.push({name:'',qty:1,price:0});render();save();tbody.lastElementChild?.querySelector('input')?.focus()});
 document.querySelector('#refresh').addEventListener('click',refreshAllPrices);
-serverSelect.addEventListener('change',()=>{localStorage.setItem('nostale-item-rechner-server',serverSelect.value);refreshAllPrices()});
+serverSelect.addEventListener('change',()=>{localStorage.setItem('nostale-item-rechner-server',serverSelect.value);window.queueNostaleCloudSave?.();refreshAllPrices()});
 document.querySelector('#clear').addEventListener('click',()=>{data=[{name:'',qty:1,price:0}];render();save()});
 document.querySelector('#copy').addEventListener('click',async()=>{const lines=data.filter(x=>x.name.trim()).map(x=>`${x.name} — ${fmt.format(x.qty)} × ${fmt.format(x.price)} Gold = ${fmt.format(x.qty*x.price)} Gold`);lines.push(`Gesamt: ${grand.textContent}`);try{await navigator.clipboard.writeText(lines.join('\n'));statusEl.textContent='Liste kopiert';}catch{statusEl.textContent='Kopieren im Browser nicht verfügbar';}});
 render();
@@ -213,6 +240,284 @@ let myOffersScan=0;document.querySelector('#load-my-offers').addEventListener('c
     event.preventDefault();
     activate(next, true);
   });
+})();
+</script><script>
+(() => {
+  const CLOUD_URL = 'https://rggjaxqbkyyxsoebdcai.supabase.co';
+  const CLOUD_KEY = 'sb_publishable_jgqiIQ_gFNlhmKB2KgSrDg_H6WHfJI2';
+  const SESSION_KEY = 'nostale-cloud-session';
+  const emailInput = document.getElementById('cloud-email');
+  const passwordInput = document.getElementById('cloud-password');
+  const status = document.getElementById('cloud-status');
+  const message = document.getElementById('cloud-message');
+  const loginForm = document.getElementById('cloud-login-form');
+  const accountPanel = document.getElementById('cloud-account');
+  const userEmail = document.getElementById('cloud-user-email');
+  const conflictPanel = document.getElementById('cloud-conflict');
+  const conflictMessage = document.getElementById('cloud-conflict-message');
+  let session = null, syncState = 'signed-out', pendingRow = null, dirty = false, busy = false;
+  let revision = 0, saveTimer = null, lastCloudUpdated = null;
+
+  function setStatus(text) { status.textContent = text; }
+  function explainError(error) {
+    const text = error && (error.message || error.msg || error.error_description);
+    return text || 'Verbindung fehlgeschlagen. Prüfe URL, Schlüssel und Datenbanktabelle.';
+  }
+  function storedSession() {
+    try { return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch { return null; }
+  }
+  function saveSession(value) {
+    const seconds = Number(value.expires_in || 3600);
+    session = Object.assign({}, session || {}, value);
+    if (value.user) session.user = value.user;
+    if (value.refresh_token) session.refresh_token = value.refresh_token;
+    session.expires_at_ms = Date.now() + seconds * 1000;
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  }
+  function clearSession() {
+    session = null;
+    localStorage.removeItem(SESSION_KEY);
+    loginForm.hidden = false;
+    accountPanel.hidden = true;
+    conflictPanel.hidden = true;
+    syncState = 'signed-out';
+    dirty = false;
+    setStatus('Nur auf diesem Gerät gespeichert');
+    message.textContent = 'Melde dich auf PC und Handy mit demselben Konto an. Änderungen werden automatisch gespeichert.';
+  }
+  async function authRequest(path, body) {
+    const response = await fetch(CLOUD_URL + '/auth/v1/' + path, {
+      method: 'POST',
+      headers: { apikey: CLOUD_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.msg || result.message || result.error_description || result.error || ('Supabase meldet HTTP ' + response.status));
+    return result;
+  }
+  async function refreshSession() {
+    if (!session || !session.refresh_token) throw new Error('Sitzung abgelaufen. Bitte erneut anmelden.');
+    const priorUser = session.user;
+    const refreshed = await authRequest('token?grant_type=refresh_token', { refresh_token: session.refresh_token });
+    if (!refreshed.user) refreshed.user = priorUser;
+    saveSession(refreshed);
+    return session;
+  }
+  async function validSession() {
+    if (!session) return null;
+    if (!session.expires_at_ms || session.expires_at_ms < Date.now() + 60000) await refreshSession();
+    return session;
+  }
+  async function cloudRequest(path, options) {
+    const opts = options || {};
+    const active = await validSession();
+    if (!active) throw new Error('Bitte melde dich zuerst an.');
+    const headers = Object.assign({ apikey: CLOUD_KEY, Authorization: 'Bearer ' + active.access_token }, opts.headers || {});
+    if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
+    const response = await fetch(CLOUD_URL + path, { method: opts.method || 'GET', headers, body: opts.body });
+    const result = await response.json().catch(() => null);
+    if (!response.ok) {
+      const detail = result && (result.message || result.msg || result.error_description || result.error);
+      throw new Error(detail || ('Supabase meldet HTTP ' + response.status));
+    }
+    return result;
+  }
+  function meaningful(items) { return Array.isArray(items) && items.some(item => String(item.name || '').trim()); }
+  function currentPayload() { return { items: data, server: serverSelect.value }; }
+  function samePayload(a, b) {
+    return JSON.stringify(a && a.items || []) === JSON.stringify(b && b.items || []) &&
+      String(a && a.server || '1') === String(b && b.server || '1');
+  }
+  function remotePayload(row) {
+    const value = row && row.data && typeof row.data === 'object' ? row.data : {};
+    return { items: Array.isArray(value.items) ? value.items : [], server: String(value.server || '1') };
+  }
+  function setSignedIn() {
+    loginForm.hidden = true;
+    accountPanel.hidden = false;
+    userEmail.textContent = session && session.user && session.user.email || '';
+  }
+  async function readCloudRow() {
+    const rows = await cloudRequest('/rest/v1/nostale_item_lists?select=data,updated_at&user_id=eq.' +
+      encodeURIComponent(session.user.id) + '&limit=1');
+    return Array.isArray(rows) && rows.length ? rows[0] : null;
+  }
+  async function writeCloud(payload) {
+    await cloudRequest('/rest/v1/nostale_item_lists?on_conflict=user_id', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify([{ user_id: session.user.id, data: payload, updated_at: new Date().toISOString() }])
+    });
+    lastCloudUpdated = new Date().toISOString();
+  }
+  function applyCloudPayload(payload) {
+    data = payload.items.length ? payload.items : [{ name: '', qty: 1, price: 0 }];
+    serverSelect.value = payload.server === '11' ? '11' : '1';
+    localStorage.setItem('nostale-item-rechner', JSON.stringify(data));
+    localStorage.setItem('nostale-item-rechner-server', serverSelect.value);
+    render();
+  }
+  function showConflict(row, localPayload) {
+    pendingRow = row;
+    syncState = 'conflict';
+    const cloudPayload = remotePayload(row);
+    conflictMessage.textContent = 'Auf diesem Gerät sind ' +
+      (localPayload.items || []).filter(item => String(item.name || '').trim()).length +
+      ' Items, in der Cloud ' + (cloudPayload.items || []).filter(item => String(item.name || '').trim()).length +
+      '. Wähle, welche Liste gelten soll.';
+    conflictPanel.hidden = false;
+    setStatus('Listen unterscheiden sich');
+    message.textContent = 'Damit keine Items unbemerkt überschrieben werden, wartet die Synchronisierung auf deine Auswahl.';
+  }
+  async function initializeCloudData() {
+    syncState = 'loading';
+    conflictPanel.hidden = true;
+    setStatus('Lade Cloud-Liste …');
+    const localPayload = currentPayload();
+    const row = await readCloudRow();
+    if (!row) {
+      syncState = 'ready';
+      await writeCloud(localPayload);
+      dirty = false;
+      lastCloudUpdated = new Date().toISOString();
+      setStatus('Cloud-Synchronisierung aktiv');
+      message.textContent = 'Diese Liste wurde als erste Cloud-Liste gespeichert. Melde dich auf dem anderen Gerät mit demselben Konto an.';
+      return;
+    }
+    const cloudPayload = remotePayload(row);
+    lastCloudUpdated = row.updated_at || null;
+    if (meaningful(localPayload.items) && meaningful(cloudPayload.items) && !samePayload(localPayload, cloudPayload)) {
+      showConflict(row, localPayload);
+      return;
+    }
+    if (meaningful(cloudPayload.items)) applyCloudPayload(cloudPayload);
+    else if (meaningful(localPayload.items)) await writeCloud(localPayload);
+    else applyCloudPayload(cloudPayload);
+    syncState = 'ready';
+    dirty = false;
+    setStatus('Cloud-Synchronisierung aktiv');
+    message.textContent = 'Änderungen werden automatisch gespeichert und beim Öffnen auf anderen Geräten geladen.';
+  }
+  function queueCloudSave() {
+    if (syncState !== 'ready' || !session || busy) return;
+    dirty = true;
+    revision++;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => { pushLocalChanges(); }, 900);
+  }
+  window.queueNostaleCloudSave = queueCloudSave;
+  async function pushLocalChanges() {
+    if (syncState !== 'ready' || !session || busy || !dirty) return;
+    busy = true;
+    const sentRevision = revision, payload = currentPayload();
+    setStatus('Speichere in der Cloud …');
+    try {
+      await writeCloud(payload);
+      if (sentRevision === revision) dirty = false;
+      setStatus(dirty ? 'Weitere Änderungen werden gespeichert …' : 'Synchronisiert');
+      message.textContent = 'Änderungen werden automatisch gespeichert und beim Öffnen auf anderen Geräten geladen.';
+    } catch (error) {
+      setStatus('Cloud-Speicherung fehlgeschlagen');
+      message.textContent = explainError(error) + ' Deine lokale Liste bleibt erhalten.';
+    } finally {
+      busy = false;
+      if (dirty && syncState === 'ready') saveTimer = setTimeout(() => { pushLocalChanges(); }, 1200);
+    }
+  }
+  async function pullCloudChanges() {
+    if (syncState !== 'ready' || !session || busy || dirty || document.visibilityState === 'hidden') return;
+    busy = true;
+    try {
+      const row = await readCloudRow();
+      if (row && row.updated_at && row.updated_at !== lastCloudUpdated) {
+        const cloudPayload = remotePayload(row);
+        if (!samePayload(currentPayload(), cloudPayload)) applyCloudPayload(cloudPayload);
+        lastCloudUpdated = row.updated_at;
+        setStatus('Synchronisiert');
+      }
+    } catch (error) {
+      setStatus('Cloud-Prüfung fehlgeschlagen');
+      message.textContent = explainError(error) + ' Deine lokale Liste bleibt erhalten.';
+    } finally { busy = false; }
+  }
+  async function signInOrRegister(mode) {
+    const email = emailInput.value.trim(), password = passwordInput.value;
+    if (!email || password.length < 6) {
+      setStatus('E-Mail und Passwort (mindestens 6 Zeichen) eingeben');
+      return;
+    }
+    const button = document.getElementById(mode === 'signup' ? 'cloud-register' : 'cloud-login');
+    button.disabled = true;
+    setStatus(mode === 'signup' ? 'Konto wird erstellt …' : 'Anmeldung läuft …');
+    try {
+      let result;
+      if (mode === 'signup') {
+        result = await authRequest('signup?redirect_to=' + encodeURIComponent(window.location.origin), { email, password });
+        if (!result.access_token) {
+          setStatus('E-Mail bestätigen');
+          message.textContent = 'Konto erstellt. Bestätige den Link in deiner E-Mail und melde dich danach hier an.';
+          return;
+        }
+      } else result = await authRequest('token?grant_type=password', { email, password });
+      saveSession(result);
+      setSignedIn();
+      passwordInput.value = '';
+      await initializeCloudData();
+    } catch (error) {
+      setStatus(mode === 'signup' ? 'Konto konnte nicht erstellt werden' : 'Anmeldung fehlgeschlagen');
+      message.textContent = explainError(error);
+    } finally { button.disabled = false; }
+  }
+  document.getElementById('cloud-login').addEventListener('click', () => signInOrRegister('login'));
+  document.getElementById('cloud-register').addEventListener('click', () => signInOrRegister('signup'));
+  passwordInput.addEventListener('keydown', event => { if (event.key === 'Enter') signInOrRegister('login'); });
+  document.getElementById('cloud-use-cloud').addEventListener('click', () => {
+    if (!pendingRow) return;
+    applyCloudPayload(remotePayload(pendingRow));
+    lastCloudUpdated = pendingRow.updated_at || null;
+    pendingRow = null;
+    conflictPanel.hidden = true;
+    syncState = 'ready';
+    dirty = false;
+    setStatus('Cloud-Liste geladen');
+    message.textContent = 'Änderungen werden automatisch gespeichert und beim Öffnen auf anderen Geräten geladen.';
+  });
+  document.getElementById('cloud-use-local').addEventListener('click', async () => {
+    const localPayload = currentPayload();
+    conflictPanel.hidden = true;
+    syncState = 'ready';
+    pendingRow = null;
+    try {
+      await writeCloud(localPayload);
+      dirty = false;
+      setStatus('Diese Geräteliste wurde hochgeladen');
+      message.textContent = 'Ab jetzt werden Änderungen automatisch gespeichert und auf anderen Geräten geladen.';
+    } catch (error) {
+      setStatus('Cloud-Speicherung fehlgeschlagen');
+      message.textContent = explainError(error) + ' Die lokale Liste bleibt erhalten.';
+    }
+  });
+  document.getElementById('cloud-sync-now').addEventListener('click', () => {
+    if (dirty) pushLocalChanges(); else pullCloudChanges();
+  });
+  document.getElementById('cloud-logout').addEventListener('click', async () => {
+    try { if (session) await cloudRequest('/auth/v1/logout', { method: 'POST' }); } catch {}
+    clearSession();
+  });
+  serverSelect.addEventListener('change', queueCloudSave);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pullCloudChanges(); });
+  setInterval(pullCloudChanges, 20000);
+  window.addEventListener('online', () => { if (dirty) pushLocalChanges(); });
+
+  const saved = storedSession();
+  if (saved && saved.access_token && saved.user) {
+    session = saved;
+    setSignedIn();
+    initializeCloudData().catch(error => {
+      if (/refresh|session|token/i.test(error.message || '')) clearSession();
+      else { syncState = 'signed-out'; setStatus('Cloud-Verbindung fehlgeschlagen'); message.textContent = explainError(error); }
+    });
+  }
 })();
 </script></body>
 </html>
